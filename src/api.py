@@ -48,6 +48,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Global in-memory store (fix for ephemeral environments)
+AUDIT_STORE = {}
+
 # Initialize Groq client
 groq_client = None
 
@@ -131,17 +134,29 @@ async def create_audit(request: Request, audit_request: AuditRequest):
         # Generate audit ID
         audit_id = str(uuid.uuid4())[:8]
         
-        # Save to database
-        await save_audit(
-            audit_id=audit_id,
-            business_name=validated_input.business_name,
-            input_data=input_data,
-            audit_result=audit_result,
-            website_url=validated_input.website_url,
-            industry=validated_input.industry,
-            location=validated_input.location,
-            email=validated_input.email
-        )
+        # 1. Save to Memory Store (Immediate Access)
+        AUDIT_STORE[audit_id] = {
+            'id': audit_id,
+            'business_name': validated_input.business_name,
+            'audit_result': audit_result,
+            'is_paid': False,
+            'email': validated_input.email
+        }
+        
+        # 2. Save to Database (Async/Backup)
+        try:
+            await save_audit(
+                audit_id=audit_id,
+                business_name=validated_input.business_name,
+                input_data=input_data,
+                audit_result=audit_result,
+                website_url=validated_input.website_url,
+                industry=validated_input.industry,
+                location=validated_input.location,
+                email=validated_input.email
+            )
+        except Exception as e:
+            print(f"DB Warning: {e}")
         
         # Format response
         return AuditResponse(
@@ -200,7 +215,12 @@ async def get_audit(audit_id: str):
 @app.post("/api/generate-report")
 async def generate_report(report_request: ReportRequest):
     """Generate PDF report for an audit."""
-    audit = await get_audit_by_id(report_request.audit_id)
+    # Check in-memory store first
+    audit = AUDIT_STORE.get(report_request.audit_id)
+    
+    # Fallback to DB
+    if not audit:
+        audit = await get_audit_by_id(report_request.audit_id)
     
     if not audit:
         raise HTTPException(status_code=404, detail="Audit not found")
