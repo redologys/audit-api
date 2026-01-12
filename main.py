@@ -21,11 +21,15 @@ else:
 # Import and initialize database
 from src.database import init_database
 
+# Initialize database tables on import (for gunicorn)
+init_database()
+
+# Import FastAPI app for gunicorn
+from src.api import app
+
+
 def main():
-    """Run the FastAPI server."""
-    # Initialize database tables
-    init_database()
-    
+    """Run the FastAPI server (for local development)."""
     # Get configuration from environment
     host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", "8000"))

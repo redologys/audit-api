@@ -5,11 +5,11 @@ pydantic-settings>=2.1.0
 email-validator>=2.0.0
 fastapi>=0.108.0
 uvicorn[standard]>=0.25.0
-weasyprint>=60.0
+gunicorn>=21.0.0
+reportlab>=4.0.0
 jinja2>=3.1.2
 aiosqlite>=0.19.0
 httpx>=0.26.0
 slowapi>=0.1.9
 python-multipart>=0.0.6
 stripe>=7.0.0
-
