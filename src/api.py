@@ -36,16 +36,15 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS configuration - parse from environment
-DEBUG = os.getenv("DEBUG", "false").lower() == "true"
-cors_origins_str = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173,http://127.0.0.1:5173,http://127.0.0.1:3000")
-cors_origins = [origin.strip() for origin in cors_origins_str.split(",") if origin.strip()]
+raw_origins = os.getenv("CORS_ORIGINS", "")
+origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
 
 # In production, NEVER use wildcard - use explicit origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins if not DEBUG else ["*"],  # Only allow * in debug mode
+    allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
