@@ -1,0 +1,410 @@
+/* Report PDF Styles */
+@page {
+  size: A4;
+  margin: 1cm;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  line-height: 1.6;
+  color: #1f2937;
+  background: #ffffff;
+}
+
+.report-container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+/* Header */
+.report-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 20px;
+  border-bottom: 2px solid #e5e7eb;
+  margin-bottom: 30px;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logo-icon {
+  font-size: 28px;
+}
+
+.logo-text {
+  font-size: 20px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.report-meta {
+  text-align: right;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+/* Hero Section */
+.hero-section {
+  text-align: center;
+  padding: 30px 0;
+  background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+  border-radius: 12px;
+  margin-bottom: 30px;
+}
+
+.hero-section h1 {
+  font-size: 28px;
+  color: #111827;
+  margin-bottom: 20px;
+}
+
+.score-display {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 20px;
+}
+
+.score-circle {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: white;
+  border: 6px solid var(--score-color, #22c55e);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.score-number {
+  font-size: 42px;
+  font-weight: 800;
+  color: #111827;
+}
+
+.score-label {
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.grade-badge {
+  font-size: 36px;
+  font-weight: 800;
+  padding: 10px 20px;
+  border-radius: 8px;
+  color: white;
+}
+
+.grade-A {
+  background: #22c55e;
+}
+.grade-B {
+  background: #3b82f6;
+}
+.grade-C {
+  background: #f59e0b;
+}
+.grade-D,
+.grade-F {
+  background: #ef4444;
+}
+
+/* Sections */
+section {
+  margin-bottom: 30px;
+}
+
+section h2 {
+  font-size: 20px;
+  color: #111827;
+  margin-bottom: 15px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #fbbf24;
+}
+
+/* Summary */
+.summary-text {
+  font-size: 16px;
+  color: #374151;
+  background: #fffbeb;
+  padding: 15px;
+  border-radius: 8px;
+  border-left: 4px solid #fbbf24;
+}
+
+/* Categories */
+.category-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 15px;
+}
+
+.category-card {
+  background: #f9fafb;
+  padding: 15px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.category-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.category-name {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.category-score {
+  font-weight: 700;
+  color: #111827;
+}
+
+.progress-bar {
+  height: 8px;
+  background: #e5e7eb;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.confidence-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  text-transform: uppercase;
+}
+
+.confidence-high {
+  background: #dcfce7;
+  color: #166534;
+}
+.confidence-medium {
+  background: #fef3c7;
+  color: #92400e;
+}
+.confidence-low {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* Quick Wins */
+.quickwin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.quickwin-card {
+  background: #f0fdf4;
+  padding: 15px;
+  border-radius: 8px;
+  border-left: 4px solid #22c55e;
+}
+
+.quickwin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.quickwin-action {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.points-badge {
+  background: #22c55e;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.quickwin-impact {
+  font-size: 13px;
+  color: #374151;
+  margin-bottom: 8px;
+}
+
+.quickwin-meta {
+  display: flex;
+  gap: 10px;
+}
+
+.time-badge,
+.difficulty-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #e5e7eb;
+}
+
+.difficulty-easy {
+  background: #dcfce7;
+  color: #166534;
+}
+.difficulty-medium {
+  background: #fef3c7;
+  color: #92400e;
+}
+.difficulty-hard {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* Insights */
+.insights-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 15px;
+}
+
+.strengths-card,
+.weaknesses-card {
+  padding: 15px;
+  border-radius: 8px;
+}
+
+.strengths-card {
+  background: #f0fdf4;
+  border: 1px solid #86efac;
+}
+
+.weaknesses-card {
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+}
+
+.insights-grid h3 {
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+
+.insights-grid ul {
+  list-style: none;
+  padding-left: 0;
+}
+
+.insights-grid li {
+  font-size: 13px;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* Social Section */
+.social-grid {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+}
+
+.social-stat {
+  text-align: center;
+  background: #f3f4f6;
+  padding: 20px;
+  border-radius: 8px;
+}
+
+.stat-number {
+  display: block;
+  font-size: 28px;
+  font-weight: 800;
+  color: #111827;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.platforms-list {
+  font-size: 14px;
+}
+
+/* Upgrade Section */
+.upgrade-section {
+  page-break-before: always;
+}
+
+.upgrade-card {
+  background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+  color: white;
+  padding: 30px;
+  border-radius: 12px;
+  text-align: center;
+}
+
+.upgrade-card h2 {
+  border: none;
+  color: white;
+  margin-bottom: 15px;
+}
+
+.upgrade-features {
+  list-style: none;
+  text-align: left;
+  max-width: 400px;
+  margin: 20px auto;
+}
+
+.upgrade-features li {
+  padding: 8px 0;
+  font-size: 14px;
+}
+
+.roi-message {
+  font-style: italic;
+  opacity: 0.9;
+  margin: 20px 0;
+}
+
+.upgrade-button {
+  display: inline-block;
+  background: #fbbf24;
+  color: #111827;
+  padding: 12px 30px;
+  border-radius: 8px;
+  font-weight: 700;
+  text-decoration: none;
+  font-size: 16px;
+}
+
+/* Footer */
+.report-footer {
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 1px solid #e5e7eb;
+  text-align: center;
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.confidence-note {
+  font-style: italic;
+  margin-bottom: 10px;
+}
