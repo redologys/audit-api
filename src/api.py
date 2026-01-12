@@ -35,13 +35,17 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# CORS configuration - allow frontend and localhost
-cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173,http://127.0.0.1:5173,http://127.0.0.1:3000").split(",")
+# CORS configuration - parse from environment
+DEBUG = os.getenv("DEBUG", "false").lower() == "true"
+cors_origins_str = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173,http://127.0.0.1:5173,http://127.0.0.1:3000")
+cors_origins = [origin.strip() for origin in cors_origins_str.split(",") if origin.strip()]
+
+# In production, NEVER use wildcard - use explicit origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins in development
+    allow_origins=cors_origins if not DEBUG else ["*"],  # Only allow * in debug mode
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -533,7 +537,7 @@ async def create_payment_intent(request: PaymentIntentRequest):
 async def stripe_webhook(request: Request):
     """
     Handle Stripe webhook events.
-    Placeholder - will be implemented when Stripe keys are available.
+    Handles: checkout.session.completed, payment_intent.succeeded
     """
     from .payments import verify_webhook_signature, handle_checkout_completed
     
@@ -548,18 +552,36 @@ async def stripe_webhook(request: Request):
             return {"received": True, "mode": "test"}
         raise HTTPException(status_code=400, detail="Invalid webhook signature")
     
-    if event.get("type") == "checkout.session.completed":
+    event_type = event.get("type", "")
+    
+    # Handle checkout session completed (redirect flow)
+    if event_type == "checkout.session.completed":
         audit_id = await handle_checkout_completed(event)
         if audit_id:
             await mark_audit_paid(audit_id)
-            return {"received": True, "audit_id": audit_id}
+            return {"received": True, "audit_id": audit_id, "event": event_type}
     
-    return {"received": True}
+    # Handle payment intent succeeded (embedded flow)
+    elif event_type == "payment_intent.succeeded":
+        payment_intent = event.get("data", {}).get("object", {})
+        metadata = payment_intent.get("metadata", {})
+        audit_id = metadata.get("audit_id")
+        if audit_id:
+            await mark_audit_paid(audit_id)
+            return {"received": True, "audit_id": audit_id, "event": event_type}
+    
+    return {"received": True, "event": event_type}
 
 
 @app.get("/api/payment-config")
-async def get_payment_config():
-    """Get current payment configuration status (for debugging)."""
+async def get_payment_config_endpoint(api_key: Optional[str] = None):
+    """Get current payment configuration status (admin only)."""
+    admin_key = os.getenv("ADMIN_API_KEY")
+    
+    # Only allow with valid admin key or in debug mode
+    if not DEBUG and api_key != admin_key:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
     from .payments import get_payment_config
     return get_payment_config()
 
