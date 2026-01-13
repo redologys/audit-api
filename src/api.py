@@ -40,6 +40,8 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 raw_origins = os.getenv("CORS_ORIGINS", "")
 origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
 
+DEBUG = os.getenv("DEBUG", "false").lower() == "true"
+
 # In production, NEVER use wildcard - use explicit origins
 app.add_middleware(
     CORSMiddleware,
@@ -373,17 +375,20 @@ async def create_test_audit(request: Request, audit_request: AuditRequest):
         audit_id = f"test-{str(uuid.uuid4())[:6]}"
         
         # Save to database with test flag
-        await save_audit(
-            audit_id=audit_id,
-            business_name=audit_request.business_name,
-            input_data=audit_request.model_dump(),
-            audit_result=audit_result,
-            website_url=audit_request.website_url,
-            industry=audit_request.industry,
-            location=audit_request.location,
-            email=str(audit_request.email) if audit_request.email else None,
-            is_test=True
-        )
+        try:
+            await save_audit_to_supabase(
+                audit_id=audit_id,
+                business_name=audit_request.business_name,
+                website_url=audit_request.website_url,
+                industry=audit_request.industry,
+                audit_result=audit_result
+            )
+            # Save lead email if provided
+            if audit_request.email:
+                await save_lead_to_supabase(str(audit_request.email), audit_id)
+        except Exception as e:
+            print(f"Test audit save error: {e}")
+            pass
         
         return AuditResponse(
             audit_id=audit_id,
