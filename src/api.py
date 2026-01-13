@@ -105,6 +105,11 @@ async def health_check():
     return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
 
 
+@app.get("/")
+def healthcheck_root():
+    return {"status": "ok"}
+
+
 # Main audit endpoint
 @app.post("/api/audit", response_model=AuditResponse)
 @limiter.limit("10/hour")
@@ -620,4 +625,5 @@ async def get_payment_config_endpoint(api_key: Optional[str] = None):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("src.api:app", host="0.0.0.0", port=port, reload=True)
