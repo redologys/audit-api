@@ -33,12 +33,15 @@ def is_stripe_configured() -> bool:
     return bool(STRIPE_SECRET_KEY and STRIPE_PRICE_ID and STRIPE_AVAILABLE)
 
 
+# Get frontend URL from environment (for production)
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
 async def create_checkout_session(
     audit_id: str,
     business_name: str,
     customer_email: Optional[str] = None,
-    success_url: str = "http://localhost:5173/results/{audit_id}?unlocked=true",
-    cancel_url: str = "http://localhost:5173/results/{audit_id}?cancelled=true"
+    success_url: Optional[str] = None,
+    cancel_url: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Create a Stripe checkout session or return mock URL.
@@ -46,6 +49,11 @@ async def create_checkout_session(
     Returns:
         Dict with checkout_url and session_id
     """
+    # Default URLs using FRONTEND_URL
+    if not success_url:
+        success_url = f"{FRONTEND_URL}/results/{{audit_id}}?payment=success"
+    if not cancel_url:
+        cancel_url = f"{FRONTEND_URL}/results/{{audit_id}}?payment=cancelled"
     
     # If in test mode or Stripe not configured, return mock
     if LOGIC_TEST_MODE or not is_stripe_configured():
