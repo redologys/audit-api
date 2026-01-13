@@ -16,10 +16,11 @@ from slowapi.errors import RateLimitExceeded
 from .input_handler import BusinessInput, validate_business_input, format_input_for_groq
 from .groq_client import GroqAuditClient, GroqClientError
 from .score_validator import validate_audit_result, correct_audit_scores
-from .database import (
-    save_audit, get_audit_by_id, track_api_usage, 
-    check_rate_limit, mark_audit_paid
+from .supabase_client import (
+    save_audit_to_supabase, get_audit_from_supabase, 
+    save_lead_to_supabase, mark_audit_paid_in_supabase
 )
+from .database import track_api_usage, check_rate_limit
 
 # Initialize rate limiter
 limiter = Limiter(key_func=get_remote_address)
@@ -48,8 +49,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Global in-memory store (fix for ephemeral environments)
-AUDIT_STORE = {}
+
 
 # Initialize Groq client
 groq_client = None
@@ -88,6 +88,10 @@ class AuditResponse(BaseModel):
     free_report_sections: list
     upgrade_cta: str
 
+
+class LeadRequest(BaseModel):
+    audit_id: str
+    email: EmailStr
 
 class ReportRequest(BaseModel):
     audit_id: str
@@ -132,31 +136,26 @@ async def create_audit(request: Request, audit_request: AuditRequest):
             audit_result = correct_audit_scores(audit_result)
         
         # Generate audit ID
-        audit_id = str(uuid.uuid4())[:8]
+        audit_id = str(uuid.uuid4())
         
-        # 1. Save to Memory Store (Immediate Access)
-        AUDIT_STORE[audit_id] = {
-            'id': audit_id,
-            'business_name': validated_input.business_name,
-            'audit_result': audit_result,
-            'is_paid': False,
-            'email': validated_input.email
-        }
-        
-        # 2. Save to Database (Async/Backup)
+        # Save to Supabase (Persistent)
         try:
-            await save_audit(
+            # Save audit payload
+            await save_audit_to_supabase(
                 audit_id=audit_id,
                 business_name=validated_input.business_name,
-                input_data=input_data,
-                audit_result=audit_result,
                 website_url=validated_input.website_url,
                 industry=validated_input.industry,
-                location=validated_input.location,
-                email=validated_input.email
+                audit_result=audit_result
             )
+            # Save lead email
+            if validated_input.email:
+                await save_lead_to_supabase(validated_input.email, audit_id)
+                
         except Exception as e:
-            print(f"DB Warning: {e}")
+            print(f"Supabase Save Error: {e}")
+            # Ensure we still return result even if save fails temporarily
+            pass
         
         # Format response
         return AuditResponse(
@@ -183,17 +182,17 @@ async def create_audit(request: Request, audit_request: AuditRequest):
 @app.get("/api/audit/{audit_id}")
 async def get_audit(audit_id: str):
     """Retrieve a previous audit by ID."""
-    audit = await get_audit_by_id(audit_id)
+    audit = await get_audit_from_supabase(audit_id)
     
     if not audit:
         raise HTTPException(status_code=404, detail="Audit not found")
     
     # Return full result for paid, limited for free
     if audit['is_paid']:
-        return audit['audit_result']
+        return audit['audit_payload']
     else:
         # Return limited free version
-        result = audit['audit_result']
+        result = audit['audit_payload']
         return {
             'audit_id': audit_id,
             'overall_score': result.get('overallScore'),
@@ -211,16 +210,28 @@ async def get_audit(audit_id: str):
         }
 
 
+# Capture Lead Endpoint
+@app.post("/api/lead")
+async def capture_lead(lead_request: LeadRequest):
+    """
+    Capture a lead (email) for a specific audit.
+    Useful for gated content or follow-ups.
+    """
+    try:
+        await save_lead_to_supabase(lead_request.email, lead_request.audit_id)
+        return {"success": True}
+    except Exception as e:
+        # Log but don't fail the request significantly (optional: return 500)
+        print(f"Lead capture error: {e}")
+        return {"success": False, "error": str(e)}
+
+
 # Generate PDF report
 @app.post("/api/generate-report")
 async def generate_report(report_request: ReportRequest):
     """Generate PDF report for an audit."""
-    # Check in-memory store first
-    audit = AUDIT_STORE.get(report_request.audit_id)
-    
-    # Fallback to DB
-    if not audit:
-        audit = await get_audit_by_id(report_request.audit_id)
+    # Retrieve from Supabase
+    audit = await get_audit_from_supabase(report_request.audit_id)
     
     if not audit:
         raise HTTPException(status_code=404, detail="Audit not found")
@@ -243,7 +254,7 @@ async def generate_report(report_request: ReportRequest):
         
         report_path = await generate_pdf_report(
             audit_id=report_request.audit_id,
-            audit_data=audit['audit_result'],
+            audit_data=audit['audit_payload'],
             business_name=audit['business_name'],
             report_type=report_request.report_type
         )
@@ -272,7 +283,7 @@ async def generate_report(report_request: ReportRequest):
 @app.get("/api/audit/{audit_id}/full")
 async def get_full_audit(audit_id: str, api_key: Optional[str] = None):
     """Get full audit result including all details."""
-    audit = await get_audit_by_id(audit_id)
+    audit = await get_audit_from_supabase(audit_id)
     
     if not audit:
         raise HTTPException(status_code=404, detail="Audit not found")
@@ -285,7 +296,7 @@ async def get_full_audit(audit_id: str, api_key: Optional[str] = None):
             detail="Full audit requires payment or admin access"
         )
     
-    return audit['audit_result']
+    return audit['audit_payload']
 
 
 # Rate limit status endpoint
@@ -389,7 +400,7 @@ async def create_test_audit(request: Request, audit_request: AuditRequest):
 @app.post("/api/test-generate-report")
 async def generate_test_report(report_request: ReportRequest):
     """Generate report in test mode (allows both free and paid without payment)."""
-    audit = await get_audit_by_id(report_request.audit_id)
+    audit = await get_audit_from_supabase(report_request.audit_id)
     
     if not audit:
         raise HTTPException(status_code=404, detail="Audit not found")
@@ -400,7 +411,7 @@ async def generate_test_report(report_request: ReportRequest):
         # In test mode, allow full report without payment
         report_path = await generate_pdf_report(
             audit_id=report_request.audit_id,
-            audit_data=audit['audit_result'],
+            audit_data=audit['audit_payload'],
             business_name=audit['business_name'],
             report_type=report_request.report_type
         )
@@ -436,7 +447,7 @@ async def create_checkout_session(checkout_request: CheckoutRequest):
     """
     from .payments import create_checkout_session as stripe_checkout
     
-    audit = await get_audit_by_id(checkout_request.audit_id)
+    audit = await get_audit_from_supabase(checkout_request.audit_id)
     
     if not audit:
         raise HTTPException(status_code=404, detail="Audit not found")
@@ -460,10 +471,7 @@ async def create_checkout_session(checkout_request: CheckoutRequest):
 @app.post("/api/confirm-payment")
 async def confirm_payment(confirm_request: PaymentConfirmRequest):
     """
-    Confirm payment and unlock full report.
-    Handles both mock payments and real Stripe payment intents.
-    """
-    audit = await get_audit_by_id(confirm_request.audit_id)
+    audit = await get_audit_from_supabase(confirm_request.audit_id)
     
     if not audit:
         raise HTTPException(status_code=404, detail="Audit not found")
@@ -485,7 +493,7 @@ async def confirm_payment(confirm_request: PaymentConfirmRequest):
                 confirm_request.audit_id
             )
             if is_valid:
-                await mark_audit_paid(confirm_request.audit_id)
+                await mark_audit_paid_in_supabase(confirm_request.audit_id)
                 return {
                     "success": True,
                     "message": "Full report unlocked",
@@ -497,7 +505,7 @@ async def confirm_payment(confirm_request: PaymentConfirmRequest):
         except Exception as e:
             # In test mode, allow anyway
             if LOGIC_TEST_MODE:
-                await mark_audit_paid(confirm_request.audit_id)
+                await mark_audit_paid_in_supabase(confirm_request.audit_id)
                 return {
                     "success": True,
                     "message": "Full report unlocked (test mode)",
@@ -506,10 +514,10 @@ async def confirm_payment(confirm_request: PaymentConfirmRequest):
             raise HTTPException(status_code=400, detail=f"Payment verification error: {str(e)}")
     
     # Check for mock/test mode
-    is_test = audit.get('audit_result', {}).get('_metadata', {}).get('isTest', False)
+    is_test = audit.get('audit_payload', {}).get('_metadata', {}).get('isTest', False)
     
     if LOGIC_TEST_MODE or is_test or (confirm_request.session_id and confirm_request.session_id.startswith('mock_')):
-        await mark_audit_paid(confirm_request.audit_id)
+        await mark_audit_paid_in_supabase(confirm_request.audit_id)
         return {
             "success": True,
             "message": "Full report unlocked",
@@ -536,7 +544,7 @@ async def create_payment_intent(request: PaymentIntentRequest):
     """
     from .payments import create_payment_intent as stripe_payment_intent
     
-    audit = await get_audit_by_id(request.audit_id)
+    audit = await get_audit_from_supabase(request.audit_id)
     
     if not audit:
         raise HTTPException(status_code=404, detail="Audit not found")
@@ -582,7 +590,7 @@ async def stripe_webhook(request: Request):
     if event_type == "checkout.session.completed":
         audit_id = await handle_checkout_completed(event)
         if audit_id:
-            await mark_audit_paid(audit_id)
+            await mark_audit_paid_in_supabase(audit_id)
             return {"received": True, "audit_id": audit_id, "event": event_type}
     
     # Handle payment intent succeeded (embedded flow)
@@ -591,7 +599,7 @@ async def stripe_webhook(request: Request):
         metadata = payment_intent.get("metadata", {})
         audit_id = metadata.get("audit_id")
         if audit_id:
-            await mark_audit_paid(audit_id)
+            await mark_audit_paid_in_supabase(audit_id)
             return {"received": True, "audit_id": audit_id, "event": event_type}
     
     return {"received": True, "event": event_type}
