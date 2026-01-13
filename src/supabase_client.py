@@ -93,23 +93,31 @@ async def save_lead_to_supabase(email: str, audit_id: str):
         "email": email,
         "audit_id": audit_id
     }
+    
+    print(f"SAVING LEAD: email={email}, audit_id={audit_id}")
 
     try:
-        response = client.table("leads").insert(data).execute()
+        response = client.table("leads_new").insert(data).execute()
+        print("SUPABASE LEAD INSERT RESPONSE:", response)
     except Exception as e:
         message = str(e)
+        print(f"SUPABASE LEAD INSERT EXCEPTION: {message}")
         if "duplicate" in message.lower():
+            print("Lead already exists (duplicate), skipping.")
             return
         raise HTTPException(status_code=500, detail=f"Lead persistence failed: {message}")
 
     error = getattr(response, "error", None)
     if error:
         message = str(error)
+        print(f"SUPABASE LEAD INSERT ERROR: {message}")
         if "duplicate" in message.lower():
+            print("Lead already exists (duplicate), skipping.")
             return
         raise HTTPException(status_code=500, detail=f"Lead persistence failed: {message}")
 
     if getattr(response, "data", None) is None:
+        print("SUPABASE LEAD INSERT: No data returned!")
         raise HTTPException(status_code=500, detail="Lead persistence failed")
 
 async def mark_audit_paid_in_supabase(audit_id: str) -> bool:
