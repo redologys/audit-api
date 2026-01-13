@@ -1,6 +1,7 @@
 import os
 from supabase import create_client, Client
 from typing import Dict, Any, Optional
+from fastapi import HTTPException
 
 # Load environment variables
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
@@ -44,7 +45,14 @@ async def save_audit_to_supabase(
     # but for simplicity/universality we'll wrap or use standard client
     # If using standard client, this is a blocking call. 
     # For high concurrency, we'd want AsyncClient, but standard is fine for now.
-    client.table("audits").insert(data).execute()
+    res = client.table("audits").insert(data).execute()
+    
+    print("SUPABASE INSERT RESPONSE:", res)
+    
+    # Check for error (handling both APIError raise and response.error property if present)
+    if hasattr(res, 'error') and res.error:
+        print("SUPABASE ERROR:", res.error)
+        raise HTTPException(status_code=500, detail="Audit persistence failed")
 
 async def get_audit_from_supabase(audit_id: str) -> Optional[Dict[str, Any]]:
     """Retrieve audit from Supabase."""
