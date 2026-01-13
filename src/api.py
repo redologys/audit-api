@@ -480,7 +480,7 @@ async def create_checkout_session(checkout_request: CheckoutRequest):
 
 @app.post("/api/confirm-payment")
 async def confirm_payment(confirm_request: PaymentConfirmRequest):
-    """
+    """Confirm payment and unlock the audit report."""
     audit = await get_audit_from_supabase(confirm_request.audit_id)
     
     if not audit:
