@@ -88,17 +88,29 @@ async def get_audit_from_supabase(audit_id: str) -> Optional[Dict[str, Any]]:
 
 async def save_lead_to_supabase(email: str, audit_id: str):
     """Save lead to Supabase leads table."""
+    client = get_supabase_client()
+    data = {
+        "email": email,
+        "audit_id": audit_id
+    }
+
     try:
-        client = get_supabase_client()
-        data = {
-            "email": email,
-            "audit_id": audit_id
-        }
-        # Upsert if email matches? Or just insert.
-        # Unique constraint on email in table might raise error
-        client.table("leads").upsert(data, on_conflict="email").execute()
+        response = client.table("leads").insert(data).execute()
     except Exception as e:
-        print(f"Lead Save Error: {e}")
+        message = str(e)
+        if "duplicate" in message.lower():
+            return
+        raise HTTPException(status_code=500, detail=f"Lead persistence failed: {message}")
+
+    error = getattr(response, "error", None)
+    if error:
+        message = str(error)
+        if "duplicate" in message.lower():
+            return
+        raise HTTPException(status_code=500, detail=f"Lead persistence failed: {message}")
+
+    if getattr(response, "data", None) is None:
+        raise HTTPException(status_code=500, detail="Lead persistence failed")
 
 async def mark_audit_paid_in_supabase(audit_id: str) -> bool:
     """Mark an audit as paid in Supabase."""
