@@ -63,6 +63,19 @@ def get_groq_client():
     return groq_client
 
 
+def _supabase_error_message(exc: Exception) -> str:
+    if DEBUG:
+        return f"Supabase error: {exc}"
+    return "Supabase unavailable"
+
+
+async def _get_audit_or_503(audit_id: str):
+    try:
+        return await get_audit_from_supabase(audit_id)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=_supabase_error_message(exc))
+
+
 # Request/Response Models
 class AuditRequest(BaseModel):
     business_name: str
@@ -155,14 +168,15 @@ async def create_audit(request: Request, audit_request: AuditRequest):
                 industry=validated_input.industry,
                 audit_result=audit_result
             )
-            # Save lead email
-            if validated_input.email:
-                await save_lead_to_supabase(validated_input.email, audit_id)
-                
         except Exception as e:
-            print(f"Supabase Save Error: {e}")
-            # Ensure we still return result even if save fails temporarily
-            pass
+            raise HTTPException(status_code=503, detail=_supabase_error_message(e))
+
+        # Save lead email
+        if validated_input.email:
+            try:
+                await save_lead_to_supabase(validated_input.email, audit_id)
+            except Exception as e:
+                print(f"Supabase Lead Save Error: {e}")
         
         # Format response
         return AuditResponse(
@@ -189,7 +203,7 @@ async def create_audit(request: Request, audit_request: AuditRequest):
 @app.get("/api/audit/{audit_id}")
 async def get_audit(audit_id: str):
     """Retrieve a previous audit by ID."""
-    audit = await get_audit_from_supabase(audit_id)
+    audit = await _get_audit_or_503(audit_id)
     
     if not audit:
         raise HTTPException(status_code=404, detail="Audit not found")
@@ -238,7 +252,7 @@ async def capture_lead(lead_request: LeadRequest):
 async def generate_report(report_request: ReportRequest):
     """Generate PDF report for an audit."""
     # Retrieve from Supabase
-    audit = await get_audit_from_supabase(report_request.audit_id)
+    audit = await _get_audit_or_503(report_request.audit_id)
     
     if not audit:
         raise HTTPException(status_code=404, detail="Audit not found")
@@ -290,7 +304,7 @@ async def generate_report(report_request: ReportRequest):
 @app.get("/api/audit/{audit_id}/full")
 async def get_full_audit(audit_id: str, api_key: Optional[str] = None):
     """Get full audit result including all details."""
-    audit = await get_audit_from_supabase(audit_id)
+    audit = await _get_audit_or_503(audit_id)
     
     if not audit:
         raise HTTPException(status_code=404, detail="Audit not found")
@@ -383,12 +397,15 @@ async def create_test_audit(request: Request, audit_request: AuditRequest):
                 industry=audit_request.industry,
                 audit_result=audit_result
             )
-            # Save lead email if provided
-            if audit_request.email:
-                await save_lead_to_supabase(str(audit_request.email), audit_id)
         except Exception as e:
-            print(f"Test audit save error: {e}")
-            pass
+            raise HTTPException(status_code=503, detail=_supabase_error_message(e))
+
+        # Save lead email if provided
+        if audit_request.email:
+            try:
+                await save_lead_to_supabase(str(audit_request.email), audit_id)
+            except Exception as e:
+                print(f"Supabase Lead Save Error: {e}")
         
         return AuditResponse(
             audit_id=audit_id,
@@ -410,7 +427,7 @@ async def create_test_audit(request: Request, audit_request: AuditRequest):
 @app.post("/api/test-generate-report")
 async def generate_test_report(report_request: ReportRequest):
     """Generate report in test mode (allows both free and paid without payment)."""
-    audit = await get_audit_from_supabase(report_request.audit_id)
+    audit = await _get_audit_or_503(report_request.audit_id)
     
     if not audit:
         raise HTTPException(status_code=404, detail="Audit not found")
@@ -457,7 +474,7 @@ async def create_checkout_session(checkout_request: CheckoutRequest):
     """
     from .payments import create_checkout_session as stripe_checkout
     
-    audit = await get_audit_from_supabase(checkout_request.audit_id)
+    audit = await _get_audit_or_503(checkout_request.audit_id)
     
     if not audit:
         raise HTTPException(status_code=404, detail="Audit not found")
@@ -481,7 +498,7 @@ async def create_checkout_session(checkout_request: CheckoutRequest):
 @app.post("/api/confirm-payment")
 async def confirm_payment(confirm_request: PaymentConfirmRequest):
     """Confirm payment and unlock the audit report."""
-    audit = await get_audit_from_supabase(confirm_request.audit_id)
+    audit = await _get_audit_or_503(confirm_request.audit_id)
     
     if not audit:
         raise HTTPException(status_code=404, detail="Audit not found")
@@ -554,7 +571,7 @@ async def create_payment_intent(request: PaymentIntentRequest):
     """
     from .payments import create_payment_intent as stripe_payment_intent
     
-    audit = await get_audit_from_supabase(request.audit_id)
+    audit = await _get_audit_or_503(request.audit_id)
     
     if not audit:
         raise HTTPException(status_code=404, detail="Audit not found")

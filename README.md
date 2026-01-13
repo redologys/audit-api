@@ -46,6 +46,8 @@ API docs available at `http://localhost:8000/docs`
 | `GROQ_API_KEY`      | Groq API key for LLM            | Yes          |
 | `STRIPE_SECRET_KEY` | Stripe secret key               | For payments |
 | `STRIPE_PRICE_ID`   | Stripe price ID for full report | For payments |
+| `SUPABASE_URL`      | Supabase project URL            | Yes          |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (server-side) | Yes |
 | `LOGIC_TEST_MODE`   | Set to `true` for mock data     | No           |
 
 ## API Endpoints

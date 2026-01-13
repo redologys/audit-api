@@ -1,21 +1,41 @@
 import os
 from supabase import create_client, Client
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
 from fastapi import HTTPException
-
-# Load environment variables
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 
 # Initialize client
 supabase: Optional[Client] = None
 
+def _get_supabase_settings() -> Tuple[str, str]:
+    url = os.environ.get("SUPABASE_URL") or os.environ.get("SUPABASE_PROJECT_URL")
+    key = (
+        os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+        or os.environ.get("SUPABASE_SERVICE_KEY")
+        or os.environ.get("SUPABASE_KEY")
+        or os.environ.get("SUPABASE_ANON_KEY")
+    )
+
+    missing = []
+    if not url:
+        missing.append("SUPABASE_URL")
+    if not key:
+        missing.append("SUPABASE_SERVICE_ROLE_KEY")
+
+    if missing:
+        missing_list = ", ".join(missing)
+        raise ValueError(
+            f"Missing Supabase env var(s): {missing_list}. "
+            "Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY."
+        )
+
+    return url, key
+
+
 def get_supabase_client() -> Client:
     global supabase
     if not supabase:
-        if not SUPABASE_URL or not SUPABASE_KEY:
-            raise ValueError("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set")
-        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+        url, key = _get_supabase_settings()
+        supabase = create_client(url, key)
     return supabase
 
 async def save_audit_to_supabase(
@@ -34,9 +54,6 @@ async def save_audit_to_supabase(
         "business_name": business_name,
         "website_url": website_url,
         "industry": industry,
-        "business_age": audit_result.get("businessAge", "Unknown"),
-        "overall_score": audit_result.get("overallScore", 0),
-        "grade": audit_result.get("grade", "F"),
         "audit_payload": audit_result,
         "is_paid": is_paid
     }
@@ -50,21 +67,24 @@ async def save_audit_to_supabase(
     print("SUPABASE INSERT RESPONSE:", res)
     
     # Check for error (handling both APIError raise and response.error property if present)
-    if hasattr(res, 'error') and res.error:
-        print("SUPABASE ERROR:", res.error)
+    error = getattr(res, "error", None)
+    if error:
+        print("SUPABASE ERROR:", error)
+        raise HTTPException(status_code=500, detail="Audit persistence failed")
+
+    if getattr(res, "data", None) is None:
         raise HTTPException(status_code=500, detail="Audit persistence failed")
 
 async def get_audit_from_supabase(audit_id: str) -> Optional[Dict[str, Any]]:
     """Retrieve audit from Supabase."""
-    try:
-        client = get_supabase_client()
-        response = client.table("audits").select("*").eq("id", audit_id).execute()
-        if response.data:
-            return response.data[0]
-        return None
-    except Exception as e:
-        print(f"Supabase Fetch Error: {e}")
-        return None
+    client = get_supabase_client()
+    response = client.table("audits").select("*").eq("id", audit_id).execute()
+    error = getattr(response, "error", None)
+    if error:
+        raise RuntimeError(f"Supabase fetch failed: {error}")
+    if response.data:
+        return response.data[0]
+    return None
 
 async def save_lead_to_supabase(email: str, audit_id: str):
     """Save lead to Supabase leads table."""
